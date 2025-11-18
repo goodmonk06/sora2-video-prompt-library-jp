@@ -34,7 +34,10 @@ export default function PromptsPage() {
       if (selectedTag) params.append("tag", selectedTag);
 
       const response = await fetch(`/api/prompts?${params}`);
-      const data = await response.json();
+      const result = await response.json();
+
+      // 新しいAPIレスポンス形式に対応
+      const data = result.data || result;
       setPrompts(data);
 
       // 全タグを抽出

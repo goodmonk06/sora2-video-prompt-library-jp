@@ -36,10 +36,13 @@ export default function PromptDetailPage() {
     try {
       const response = await fetch(`/api/prompts/${id}`);
       if (response.ok) {
-        const data = await response.json();
+        const result = await response.json();
+        // 新しいAPIレスポンス形式に対応
+        const data = result.data || result;
         setPrompt(data);
       } else {
-        alert("プロンプトが見つかりませんでした");
+        const error = await response.json();
+        alert(error.error || "プロンプトが見つかりませんでした");
         router.push("/prompts");
       }
     } catch (error) {

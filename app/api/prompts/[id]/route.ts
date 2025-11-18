@@ -1,5 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { updatePromptSchema } from "@/lib/validations";
+import { successResponse, errorResponse, handleApiError } from "@/lib/api-response";
 
 // GET /api/prompts/[id] - 詳細取得
 export async function GET(
@@ -12,20 +14,18 @@ export async function GET(
     });
 
     if (!prompt) {
-      return NextResponse.json({ error: "Prompt not found" }, { status: 404 });
+      return errorResponse("プロンプトが見つかりませんでした", undefined, 404);
     }
 
-    return NextResponse.json({
+    const response = {
       ...prompt,
       tags: JSON.parse(prompt.tags || "[]"),
       styleKeywords: JSON.parse(prompt.styleKeywords || "[]"),
-    });
+    };
+
+    return successResponse(response);
   } catch (error) {
-    console.error("Error fetching prompt:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch prompt" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }
 
@@ -36,28 +36,43 @@ export async function PUT(
 ) {
   try {
     const body = await request.json();
-    const { tags, styleKeywords, ...otherFields } = body;
 
-    const updateData: any = { ...otherFields };
-    if (tags) updateData.tags = JSON.stringify(tags);
-    if (styleKeywords) updateData.styleKeywords = JSON.stringify(styleKeywords);
+    // バリデーション
+    const validatedData = updatePromptSchema.parse(body);
+
+    // 存在確認
+    const existing = await prisma.promptPreset.findUnique({
+      where: { id: params.id },
+    });
+
+    if (!existing) {
+      return errorResponse("プロンプトが見つかりませんでした", undefined, 404);
+    }
+
+    // 更新データの準備
+    const updateData: any = {};
+    if (validatedData.title !== undefined) updateData.title = validatedData.title;
+    if (validatedData.description !== undefined) updateData.description = validatedData.description;
+    if (validatedData.mainPrompt !== undefined) updateData.mainPrompt = validatedData.mainPrompt;
+    if (validatedData.negativePrompt !== undefined) updateData.negativePrompt = validatedData.negativePrompt;
+    if (validatedData.tags !== undefined) updateData.tags = JSON.stringify(validatedData.tags);
+    if (validatedData.lengthSeconds !== undefined) updateData.lengthSeconds = validatedData.lengthSeconds;
+    if (validatedData.styleKeywords !== undefined) updateData.styleKeywords = JSON.stringify(validatedData.styleKeywords);
 
     const prompt = await prisma.promptPreset.update({
       where: { id: params.id },
       data: updateData,
     });
 
-    return NextResponse.json({
+    const response = {
       ...prompt,
       tags: JSON.parse(prompt.tags),
       styleKeywords: JSON.parse(prompt.styleKeywords),
-    });
+    };
+
+    return successResponse(response, "プロンプトを更新しました");
   } catch (error) {
-    console.error("Error updating prompt:", error);
-    return NextResponse.json(
-      { error: "Failed to update prompt" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }
 
@@ -67,16 +82,21 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    // 存在確認
+    const existing = await prisma.promptPreset.findUnique({
+      where: { id: params.id },
+    });
+
+    if (!existing) {
+      return errorResponse("プロンプトが見つかりませんでした", undefined, 404);
+    }
+
     await prisma.promptPreset.delete({
       where: { id: params.id },
     });
 
-    return NextResponse.json({ success: true });
+    return successResponse({ success: true }, "プロンプトを削除しました");
   } catch (error) {
-    console.error("Error deleting prompt:", error);
-    return NextResponse.json(
-      { error: "Failed to delete prompt" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

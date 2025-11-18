@@ -44,10 +44,13 @@ export default function NewPromptPage() {
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const result = await response.json();
+        // 新しいAPIレスポンス形式に対応
+        const data = result.data || result;
         router.push(`/prompts/${data.id}`);
       } else {
-        alert("プロンプトの作成に失敗しました");
+        const error = await response.json();
+        alert(error.error || "プロンプトの作成に失敗しました");
       }
     } catch (error) {
       console.error("Failed to create prompt:", error);

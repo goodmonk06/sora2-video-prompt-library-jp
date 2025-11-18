@@ -1,28 +1,40 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { createPromptSchema, searchPromptsSchema } from "@/lib/validations";
+import { successResponse, errorResponse, handleApiError } from "@/lib/api-response";
 
 // GET /api/prompts - 一覧取得（検索・フィルタ対応）
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const search = searchParams.get("search") || "";
-    const tag = searchParams.get("tag") || "";
+    const search = searchParams.get("search") || undefined;
+    const tag = searchParams.get("tag") || undefined;
+    const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!) : undefined;
+    const offset = searchParams.get("offset") ? parseInt(searchParams.get("offset")!) : undefined;
+
+    // バリデーション
+    const validatedParams = searchPromptsSchema.parse({
+      search,
+      tag,
+      limit,
+      offset,
+    });
 
     const prompts = await prisma.promptPreset.findMany({
       where: {
         AND: [
-          search
+          validatedParams.search
             ? {
                 OR: [
-                  { title: { contains: search } },
-                  { description: { contains: search } },
-                  { mainPrompt: { contains: search } },
+                  { title: { contains: validatedParams.search } },
+                  { description: { contains: validatedParams.search } },
+                  { mainPrompt: { contains: validatedParams.search } },
                 ],
               }
             : {},
-          tag
+          validatedParams.tag
             ? {
-                tags: { contains: tag },
+                tags: { contains: validatedParams.tag },
               }
             : {},
         ],
@@ -30,6 +42,8 @@ export async function GET(request: NextRequest) {
       orderBy: {
         createdAt: "desc",
       },
+      take: validatedParams.limit,
+      skip: validatedParams.offset,
     });
 
     // JSON文字列をパース
@@ -39,13 +53,9 @@ export async function GET(request: NextRequest) {
       styleKeywords: JSON.parse(prompt.styleKeywords || "[]"),
     }));
 
-    return NextResponse.json(parsedPrompts);
+    return successResponse(parsedPrompts);
   } catch (error) {
-    console.error("Error fetching prompts:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch prompts" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }
 
@@ -53,38 +63,30 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const {
-      title,
-      description,
-      mainPrompt,
-      negativePrompt = "",
-      tags = [],
-      lengthSeconds = 5,
-      styleKeywords = [],
-    } = body;
+
+    // バリデーション
+    const validatedData = createPromptSchema.parse(body);
 
     const prompt = await prisma.promptPreset.create({
       data: {
-        title,
-        description,
-        mainPrompt,
-        negativePrompt,
-        tags: JSON.stringify(tags),
-        lengthSeconds,
-        styleKeywords: JSON.stringify(styleKeywords),
+        title: validatedData.title,
+        description: validatedData.description,
+        mainPrompt: validatedData.mainPrompt,
+        negativePrompt: validatedData.negativePrompt,
+        tags: JSON.stringify(validatedData.tags),
+        lengthSeconds: validatedData.lengthSeconds,
+        styleKeywords: JSON.stringify(validatedData.styleKeywords),
       },
     });
 
-    return NextResponse.json({
+    const response = {
       ...prompt,
       tags: JSON.parse(prompt.tags),
       styleKeywords: JSON.parse(prompt.styleKeywords),
-    });
+    };
+
+    return successResponse(response, "プロンプトを作成しました", 201);
   } catch (error) {
-    console.error("Error creating prompt:", error);
-    return NextResponse.json(
-      { error: "Failed to create prompt" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }
