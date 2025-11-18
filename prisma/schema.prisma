@@ -19,8 +19,67 @@ model PromptPreset {
   tags           String   @default("[]") // JSON配列として保存（日本語対応）
   lengthSeconds  Int      @default(5)
   styleKeywords  String   @default("[]") // JSON配列として保存
+
+  // Phase 3: メタデータフィールド
+  viewCount      Int      @default(0)
+  usageCount     Int      @default(0)
+  lastUsedAt     DateTime?
+  isArchived     Boolean  @default(false)
+  quality        Int?     // 1-5の品質評価
+  collectionId   String?
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // Relations
+  collection     Collection?     @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  histories      PromptHistory[]
+  favorites      Favorite[]
+
   @@index([createdAt])
+  @@index([collectionId])
+  @@index([isArchived])
+}
+
+// Phase 3: コレクション（プロンプトのグループ化）
+model Collection {
+  id          String         @id @default(cuid())
+  name        String
+  description String         @default("")
+  color       String?        // UI用の色コード
+  icon        String?        // アイコン識別子
+  isDefault   Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  prompts     PromptPreset[]
+
+  @@index([name])
+}
+
+// Phase 3: プロンプト変更履歴
+model PromptHistory {
+  id             String   @id @default(cuid())
+  promptPresetId String
+  snapshot       String   // JSON: プロンプトの完全なスナップショット
+  changeType     String   // "created" | "updated" | "restored"
+  changedAt      DateTime @default(now())
+
+  promptPreset   PromptPreset @relation(fields: [promptPresetId], references: [id], onDelete: Cascade)
+
+  @@index([promptPresetId])
+  @@index([changedAt])
+}
+
+// Phase 3: お気に入り
+model Favorite {
+  id             String   @id @default(cuid())
+  promptPresetId String
+  userId         String   @default("default") // 将来のマルチユーザー対応用
+  createdAt      DateTime @default(now())
+
+  promptPreset   PromptPreset @relation(fields: [promptPresetId], references: [id], onDelete: Cascade)
+
+  @@unique([promptPresetId, userId])
+  @@index([userId])
 }
