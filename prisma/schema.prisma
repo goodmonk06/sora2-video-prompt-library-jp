@@ -1,0 +1,26 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model PromptPreset {
+  id             String   @id @default(cuid())
+  title          String
+  description    String
+  mainPrompt     String   // 英語のメインプロンプト
+  negativePrompt String   @default("")
+  tags           String   @default("[]") // JSON配列として保存（日本語対応）
+  lengthSeconds  Int      @default(5)
+  styleKeywords  String   @default("[]") // JSON配列として保存
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([createdAt])
+}
